@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexSense‑Ultra | BLE高级传感监测平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif;}
+:root{
+  --primary:#0ea5e9;--accent:#22d3ee;--danger:#ef4444;--warn:#f59e0b;--success:#10b981;
+  --bg-main:#050812;--card-bg:rgba(12,18,35,0.72);--card-border:rgba(148,163,184,0.14);
+}
+[data-theme="cyber-red"]{--primary:#ef4444;--accent:#fb7185;}
+[data-theme="dark-blue"]{--primary:#8b5cf6;--accent:#a78bfa;}
+body{background:var(--bg-main);color:#e2e8f0;min-height:100vh;overflow-x:hidden;}
+.glass-pro{background:var(--card-bg);backdrop-filter:blur(16px);border:1px solid var(--card-border);border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.4);}
+.glass-pro.alarm-border{border-color:var(--danger);box-shadow:0 0 14px rgba(239,68,68,0.35),0 8px 30px rgba(0,0,0,0.4);}
+.btn-flow{position:relative;overflow:hidden;cursor:pointer !important;}
+.btn-flow::before{content:'';position:absolute;top:0;left:-120%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent);transition:left 0.6s;}
+.btn-flow:hover::before{left:120%;}
+.breathe-green{animation:breatheGreen 2s infinite;}
+@keyframes breatheGreen{0%{box-shadow:0 0 3px 1px rgba(16,185,129,0.3);}50%{box-shadow:0 0 10px 4px rgba(16,185,129,0.55);}100%{box-shadow:0 0 3px 1px rgba(16,185,129,0.3);}}
+.toast-container{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+.toast{pointer-events:auto;padding:10px 14px;border-radius:10px;min-width:240px;}
+.toggle-switch{width:44px;height:22px;border-radius:999px;background:#334155;position:relative;cursor:pointer;transition:0.25s;}
+.toggle-switch.active{background:var(--primary);}
+.toggle-switch::after{content:"";position:absolute;top:1px;left:1px;width:19px;height:19px;background:#fff;border-radius:50%;transition:0.25s;}
+.toggle-switch.active::after{transform:translateX(22px);}
+.gauge-wrap{position:relative;width:120px;height:120px;margin:0 auto;}
+.gauge-bg{fill:none;stroke:#1e293b;stroke-width:11;}
+.gauge-bar{fill:none;stroke:var(--accent);stroke-width:11;stroke-linecap:round;transform:rotate(-120deg);transform-origin:center;transition:stroke-dashoffset 0.35s ease;}
+.gauge-text{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.data-card{background-color:rgba(30,41,59,0.45);border-radius:12px;padding:14px;border:1px solid transparent;transition:0.2s;}
+.data-card.alarm{border-color:rgba(239,68,68,0.5);background-color:rgba(239,68,68,0.12);}
+.data-card:hover{background-color:rgba(51,65,85,0.55);}
+.data-card .card-label{font-size:12px;color:#94a3b8;display:flex;align-items:center;gap:4px;}
+.data-card .card-value{font-size:22px;font-weight:bold;margin-top:6px;}
+.data-card .card-desc{font-size:11px;color:#64748b;margin-top:4px;}
+::-webkit-scrollbar{width:7px;height:7px;}
+::-webkit-scrollbar-thumb{background:#475569;border-radius:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+
+/* ==========修复图表无限拉长核心CSS========== */
+.chart-item{
+  display:flex;
+  flex-direction:column;
+  min-height:260px;
+  height:260px;
+}
+.chart-item h4{
+  flex:0 0 auto;
+  margin-bottom:8px;
+}
+.chart-item canvas{
+  flex:1 1 auto;
+  width:100% !important;
+  height:100% !important;
+}
+/* 强制所有按钮鼠标指针 */
+button{cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="toast-container" id="toastBox"></div>
+<div id="app" class="min-h-screen">
+<header class="glass-pro sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center flex-wrap gap-3">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-[var(--primary)]/25 flex items-center justify-center"><i class="fa fa-bluetooth-b text-[var(--accent)] text-lg"></i></div>
+            <div><div class="font-semibold">NexSense‑Ultra</div><div class="text-xs text-slate-400">BLE高级传感监测平台</div></div>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+            <select id="themeSelect" class="bg-slate-800/60 border border-slate-600 rounded px-2 py-1 text-sm">
+                <option value="default">默认赛博青蓝</option>
+                <option value="cyber-red">赛博赤红</option>
+                <option value="dark-blue">暗夜紫蓝</option>
+            </select>
+            <div id="themeToggle" class="toggle-switch active" title="暂停/继续数据流"></div>
+        </div>
+    </div>
+</header>
+<main class="max-w-7xl mx-auto px-4 py-5">
+    <div class="glass-pro p-3 mb-4 flex flex-wrap gap-4 justify-between items-center text-sm">
+        <div class="flex gap-4 flex-wrap items-center">
+            <div class="flex items-center gap-2"><span id="sysBtDot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span><span>蓝牙状态：<span id="sysBtText">未连接</span></span></div>
+            <div>采样率：<span id="rateText">1200ms</span></div>
+            <div>设备：<span id="currentDev">无</span></div>
+            <div>FPS:<span id="fpsText">--</span></div>
+            <div>单元：<span id="unitText">℃</span><button id="btnToggleUnit" class="border px-1 rounded text-xs ml-1">切换℉/℃</button></div>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+            <button id="btnDisconnect" class="px-3 py-1 rounded bg-red-600/25 border border-red-600/40 text-red-300 text-sm hidden">断开设备</button>
+            <button id="btnResetAll" class="px-3 py-1 rounded bg-slate-600/25 border border-slate-600/40 text-slate-300 text-sm">重置全部数据</button>
+            <button id="btnExportCsv" class="px-3 py-1 rounded bg-emerald-600/25 border border-emerald-600/40 text-emerald-300 text-sm">导出CSV</button>
+            <button id="btnExportJson" class="px-3 py-1 rounded bg-purple-600/25 border border-purple-600/40 text-purple-300 text-sm">导出JSON</button>
+            <button id="btnSaveChartImg" class="px-3 py-1 rounded bg-blue-600/25 border border-blue-600/40 text-blue-300 text-sm">导出图表图片</button>
+            <button id="btnPlayBack" class="px-3 py-1 rounded bg-orange-600/25 border border-orange-600/40 text-orange-300 text-sm">回放历史</button>
+        </div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div class="lg:col-span-4 space-y-4">
+            <div id="ble-panel" class="glass-pro p-4">
+                <div class="flex justify-between items-center mb-3"><h3 class="font-semibold"><i class="fa fa-bluetooth-b text-[var(--accent)] mr-2"></i>蓝牙设备管理</h3><span id="btBadge" class="px-2 py-0.5 rounded text-xs bg-slate-700">待机</span></div>
+                <button id="scanBtn" class="w-full btn-flow bg-[var(--primary)] py-2 rounded-lg mb-3"><i class="fa fa-search mr-2"></i>扫描BLE设备</button>
+                <div id="devListBox" class="min-h-[120px] max-h-[220px] overflow-y-auto border border-dashed border-slate-700 rounded-lg p-2 text-sm text-slate-400"><div class="text-center py-4">等待扫描设备</div></div>
+                <div id="devDetailPanel" class="mt-3 pt-3 border-t border-slate-700 text-xs text-slate-500">未连接设备</div>
+                <div class="mt-3 pt-3 border-t border-slate-700">
+                    <div class="text-xs text-slate-400 mb-1">⭐已收藏设备</div>
+                    <div id="favBox" class="text-xs text-slate-500">暂无收藏</div>
+                </div>
+            </div>
+            <div id="setting-panel" class="glass-pro p-4">
+                <h3 class="font-semibold mb-3"><i class="fa fa-sliders text-amber-400 mr-2"></i>监测阈值配置</h3>
+                <div class="space-y-3 text-sm">
+                    <div><label class="block text-slate-300 mb-1">温度告警上限 ℃</label><input id="tempMax" value="42" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2 focus:border-[var(--accent)] outline-none"></div>
+                    <div><label class="block text-slate-300 mb-1">温度告警下限 ℃</label><input id="tempMin" value="34" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2 focus:border-[var(--accent)] outline-none"></div>
+                    <div><label class="block text-slate-300 mb-1">PH告警上限</label><input id="phMax" value="4.5" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2"></div>
+                    <div><label class="block text-slate-300 mb-1">PH告警下限</label><input id="phMin" value="1.0" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2"></div>
+                    <div><label class="block text-slate-300 mb-1">湿度告警上限 %RH</label><input id="humiMax" value="95" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2"></div>
+                    <div><label class="block text-slate-300 mb-1">湿度告警下限 %RH</label><input id="humiMin" value="75" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2"></div>
+                    <div><label class="block text-slate-300 mb-1">电压告警上限 V</label><input id="voltMax" value="3.3" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2"></div>
+                    <div><label class="block text-slate-300 mb-1">电压告警下限 V</label><input id="voltMin" value="2.8" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2"></div>
+                    <div><label class="block text-slate-300 mb-1">RSSI告警阈值(dBm)，小于该值告警</label><input id="rssiAlarmTh" value="-65" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2"></div>
+                    <div>
+                        <label class="block text-slate-300 mb-1">采样间隔(ms)</label>
+                        <select id="sampleRateSel" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2">
+                            <option value="2000">2000ms</option><option value="5000">5000ms</option><option value="10000" selected>10000ms</option>
+                            <option value="15000">15000ms</option><option value="20000">20000ms</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 mb-1">图表最大缓存点数</label>
+                        <select id="maxStoreSel" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2">
+                            <option value="40">40点</option>
+                            <option value="80" selected>80点</option>
+                            <option value="120">120点</option>
+                            <option value="200">200点</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 mb-1">工作模式（手动）</label>
+                        <select id="workModeSel" class="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2">
+                            <option value="正常采集">正常采集</option>
+                            <option value="高速采样">高速采样</option>
+                            <option value="低功耗休眠">低功耗休眠</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center justify-between"><span class="text-slate-300">告警提示音</span><div class="toggle-switch" id="alarmAudioToggle"></div></div>
+                    <button id="btnSaveThreshold" class="w-full btn-flow bg-amber-600 py-2 rounded-lg mt-1">保存阈值</button>
+                </div>
+            </div>
+            <div class="glass-pro p-4">
+                <div class="flex justify-between items-center mb-3"><h3 class="font-semibold"><i class="fa fa-bell text-amber-400 mr-2"></i>告警事件</h3><button id="btnClearAlarm" class="text-xs text-slate-400 hover:text-white">清空</button></div>
+                <div id="alarmContainer" class="max-h-[180px] overflow-y-auto text-sm space-y-2"><div class="text-slate-500 text-center py-3">暂无告警</div></div>
+            </div>
+        </div>
+        <div class="lg:col-span-8 space-y-4">
+            <div id="dashboard" class="glass-pro p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <div class="flex items-center gap-3"><h3 class="font-semibold"><i class="fa fa-desktop text-[var(--accent)] mr-2"></i>实时传感监测面板</h3><span id="panelStatusBadge" class="px-2 py-0.5 rounded text-xs bg-slate-700">待机</span></div>
+                    <div class="text-xs text-slate-400">采样计数：<span id="dispCount">0</span>｜最后更新:<span id="lastUpdateTime">--:--:--</span></div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div class="data-card" id="card-temp"><div class="card-label"><i class="fa fa-thermometer-half"></i>温度</div><div class="card-value" id="dispTemp">-- °C</div><div class="card-desc" id="tempTip">人体胃部参考:36~38℃</div></div>
+                    <div class="data-card" id="card-humi"><div class="card-label"><i class="fa fa-tint"></i>湿度</div><div class="card-value" id="dispHumi">-- %RH</div><div class="card-desc">胃部环境相对湿度</div></div>
+                    <div class="data-card" id="card-ph"><div class="card-label"><i class="fa fa-flask"></i>PH值</div><div class="card-value" id="dispPh">--</div><div class="card-desc" id="phTip">胃部参考:1.5‑3.5</div></div>
+                    <div class="data-card" id="card-rssi"><div class="card-label"><i class="fa fa-wifi"></i>RSSI信号</div><div class="card-value" id="dispRssi">-- dBm</div><div class="card-desc" id="rssiQuality">信号等级: --</div></div>
+                    <div class="data-card" id="card-bat"><div class="card-label"><i class="fa fa-battery-three-quarters"></i>电池电压</div><div class="card-value" id="dispBatt">-- V</div><div class="card-desc" id="battTip">设备供电电压</div></div>
+                    <div class="data-card flex items-center justify-center">
+                        <div class="gauge-wrap">
+                            <svg viewBox="0 0 120 120">
+                                <circle class="gauge-bg" cx="60" cy="60" r="46"></circle>
+                                <circle id="gaugeArc" class="gauge-bar" cx="60" cy="60" r="46" stroke-dasharray="289" stroke-dashoffset="289"></circle>
+                            </svg>
+                            <div class="gauge-text"><div class="text-xs text-slate-400">信号质量</div><div id="gaugeVal" class="text-base font-bold">--</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 5张独立图表 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="glass-pro p-4 chart-item"><h4 class="font-medium text-sm mb-2">🌡温度变化曲线(℃)</h4><canvas id="chartTemp"></canvas></div>
+                <div class="glass-pro p-4 chart-item"><h4 class="font-medium text-sm mb-2">💧湿度变化曲线(%RH)</h4><canvas id="chartHumi"></canvas></div>
+                <div class="glass-pro p-4 chart-item"><h4 class="font-medium text-sm mb-2">🧪PH数值变化曲线</h4><canvas id="chartPh"></canvas></div>
+                <div class="glass-pro p-4 chart-item"><h4 class="font-medium text-sm mb-2">🔋电池电压变化曲线(V)</h4><canvas id="chartVolt"></canvas></div>
+                <div class="glass-pro p-4 chart-item md:col-span-2"><h4 class="font-medium text-sm mb-2">📶蓝牙RSSI信号强度(dBm)</h4><canvas id="chartRssi"></canvas></div>
+            </div>
+
+            <div id="stat-panel" class="glass-pro p-4">
+                <h4 class="font-medium text-sm mb-2">📊数据统计分析</h4>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                    <div class="bg-slate-800/40 rounded-lg p-3"><div class="text-xs text-slate-400">温度最大值</div><div id="statTempMax" class="text-lg font-semibold">--</div></div>
+                    <div class="bg-slate-800/40 rounded-lg p-3"><div class="text-xs text-slate-400">温度最小值</div><div id="statTempMin" class="text-lg font-semibold">--</div></div>
+                    <div class="bg-slate-800/40 rounded-lg p-3"><div class="text-xs text-slate-400">温度平均值</div><div id="statTempAvg" class="text-lg font-semibold">--</div></div>
+                    <div class="bg-slate-800/40 rounded-lg p-3"><div class="text-xs text-slate-400">PH平均值</div><div id="statPhAvg" class="text-lg font-semibold">--</div></div>
+                    <div class="bg-slate-800/40 rounded-lg p-3"><div class="text-xs text-slate-400">电压平均值</div><div id="statVoltAvg" class="text-lg font-semibold">--</div></div>
+                </div>
+            </div>
+            <div id="log-panel" class="glass-pro p-4">
+                <div class="flex justify-between items-center mb-3 flex-wrap gap-2">
+                    <h3 class="font-semibold"><i class="fa fa-table text-emerald-400 mr-2"></i>历史数据日志</h3>
+                    <div class="flex gap-2 items-center">
+                        <input id="logSearchInput" placeholder="搜索日志..." class="bg-slate-800/60 border border-slate-600 rounded px-2 py-1 text-sm w-32">
+                        <button id="btnFilterLog" class="text-xs border px-2 py-1 rounded hover:bg-slate-700">筛选</button>
+                        <button id="btnClearLog" class="text-xs border px-2 py-1 rounded hover:bg-slate-700">清空日志</button>
+                    </div>
+                </div>
+                <div class="overflow-auto max-h-[190px]">
+                    <table class="w-full text-sm">
+                        <thead class="text-slate-400 border-b border-slate-700">
+                            <tr><th class="text-left py-2 pr-2">时间</th><th class="text-left py-2 pr-2">温度</th><th class="text-left py-2 pr-2">湿度</th><th class="text-left py-2 pr-2">PH</th><th class="text-left py-2 pr-2">RSSI</th><th class="text-left py-2 pr-2">电池(V)</th><th class="text-left py-2">状态</th></tr>
+                        </thead>
+                        <tbody id="logTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+const state = {
+    charts: { temp:null, humi:null, ph:null, volt:null, rssi:null },
+    timer: null, playbackTimer: null,
+    sampleInterval: 10000, sampleCounter:0, dev:null,
+    threshold: { tempMax:42, tempMin:34, phMax:4.5, phMin:1.0, humiMax:95, humiMin:75, voltMax:3.3, voltMin:2.8, rssiTh:-65 },
+    csv:[], json:[], fav:[],
+    paused:false, fahrenheit:false, alarmAudio:false,
+    tempRec:[], humiRec:[], phRec:[], rssiRec:[], battRec:[],
+    fps:0, fpsTs:performance.now(), audioCtx:null,
+    maxStore:80, maxLog:150, isPlayback:false, lastAlarmTs:{},
+    manualWorkMode:"正常采集",
+    filterBuf:{temp:[],humi:[],ph:[],rssi:[],batt:[]},
+    filterWindow:6,
+    resizeTimer:null
+};
+const toastType = { info:"bg-sky-700/80", success:"bg-emerald-700/80", warn:"bg-amber-700/80", error:"bg-red-700/80" };
+
+function lowPassFilter(buffer, newValue, winSize){
+    buffer.push(newValue);
+    while(buffer.length>winSize) buffer.shift();
+    const sum = buffer.reduce((s,v)=>s+v,0);
+    return sum / buffer.length;
+}
+
+function showToast(msg,type="info"){
+    try{
+        const box = $("#toastBox");
+        if(!box) return;
+        const t = document.createElement("div");
+        t.className = `toast ${toastType[type]}`;
+        t.textContent = msg;
+        box.appendChild(t);
+        t.style.transition="opacity 0.3s";
+        setTimeout(()=>{t.style.opacity="0";setTimeout(()=>t.remove(),300);},2500);
+    }catch(e){console.log(msg);}
+}
+function playAlarmTone(){
+    if(!state.alarmAudio) return;
+    try{
+        if(!state.audioCtx) state.audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+        const osc = state.audioCtx.createOscillator();
+        const gain = state.audioCtx.createGain();
+        osc.connect(gain); gain.connect(state.audioCtx.destination);
+        osc.type="square"; osc.frequency.value=880; gain.gain.value=0.1;
+        osc.start(); osc.stop(state.audioCtx.currentTime+0.22);
+    }catch(e){}
+}
+function changeGlobalTheme(){
+    const v = $("#themeSelect").value;
+    document.body.removeAttribute("data-theme");
+    if(v!=="default") document.body.setAttribute("data-theme",v);
+    showToast("主题已切换");
+}
+function togglePauseStream(){
+    state.paused = !state.paused;
+    $("#themeToggle").classList.toggle("active",!state.paused);
+    showToast(state.paused?"数据流暂停（快照冻结）":"数据流恢复采集");
+}
+function toggleTempUnit(){
+    state.fahrenheit = !state.fahrenheit;
+    $("#unitText").textContent = state.fahrenheit?"℉":"℃";
+    showToast("温度单位切换完成");
+}
+function toggleAlarmAudio(){
+    state.alarmAudio = !state.alarmAudio;
+    $("#alarmAudioToggle").classList.toggle("active",state.alarmAudio);
+    showToast(state.alarmAudio?"告警音开启":"告警音关闭");
+}
+function saveThreshold(){
+    const tempMax = Number($("#tempMax").value);
+    const tempMin = Number($("#tempMin").value);
+    const phMax = Number($("#phMax").value);
+    const phMin = Number($("#phMin").value);
+    const humiMax = Number($("#humiMax").value);
+    const humiMin = Number($("#humiMin").value);
+    const voltMax = Number($("#voltMax").value);
+    const voltMin = Number($("#voltMin").value);
+    const rssiTh = Number($("#rssiAlarmTh").value);
+    if(isNaN(tempMax)||isNaN(tempMin)||isNaN(phMax)||isNaN(phMin)||isNaN(humiMax)||isNaN(humiMin)||isNaN(voltMax)||isNaN(voltMin)||isNaN(rssiTh)) return showToast("阈值请输入数字","error");
+    Object.assign(state.threshold,{tempMax,tempMin,phMax,phMin,humiMax,humiMin,voltMax,voltMin,rssiTh});
+    localStorage.setItem("tempThreshold",JSON.stringify(state.threshold));
+    updateAllChartThresholdLines();
+    showToast("阈值已保存","success");
+}
+function updateMaxStore(){
+    state.maxStore = Number($("#maxStoreSel").value);
+    showToast("图表缓存点数已更新");
+}
+function changeSampleRate(){
+    state.sampleInterval = Number($("#sampleRateSel").value);
+    $("#rateText").textContent = state.sampleInterval+"ms";
+    if(state.timer) clearInterval(state.timer);
+    startSimStream();
+    showToast("采样间隔更新");
+}
+function changeWorkMode(){
+    state.manualWorkMode = $("#workModeSel").value;
+    showToast(`工作模式已切换为：${state.manualWorkMode}`);
+}
+function clearAlarm(){
+    $("#alarmContainer").innerHTML = `<div class="text-slate-500 text-center py-3">暂无告警</div>`;
+    $("#dashboard").classList.remove("alarm-border");
+    $("#card-temp").classList.remove("alarm");
+    $("#card-ph").classList.remove("alarm");
+    $("#card-rssi").classList.remove("alarm");
+    $("#card-humi").classList.remove("alarm");
+    $("#card-bat").classList.remove("alarm");
+    state.lastAlarmTs = {};
+}
+function pushAlarm(text){
+    const now = Date.now();
+    if(state.lastAlarmTs[text]&&now-state.lastAlarmTs[text]<3000) return;
+    state.lastAlarmTs[text]=now;
+    const c = $("#alarmContainer");
+    if(c.querySelector(".text-slate-500")) c.innerHTML="";
+    const item = document.createElement("div");
+    item.className="p-2 rounded bg-red-900/30 border border-red-700/40 text-xs";
+    item.textContent=`[${new Date().toLocaleTimeString()}] ${text}`;
+    c.prepend(item);
+    $("#dashboard").classList.add("alarm-border");
+    playAlarmTone();
+}
+function clearLog(){
+    $("#logTbody").innerHTML="";
+    state.csv=[];state.json=[];state.tempRec=[];state.humiRec=[];state.phRec=[];state.rssiRec=[];state.battRec=[];
+    Object.values(state.filterBuf).forEach(arr=>arr.length=0);
+    showToast("日志已清空");
+}
+function resetAllData(){
+    clearAlarm(); clearLog();
+    state.sampleCounter=0;
+    $("#dispCount").textContent="0";$("#lastUpdateTime").textContent="--:--:--";
+    $("#dispTemp").textContent="-- °C";$("#dispHumi").textContent="-- %RH";
+    $("#dispPh").textContent="--";
+    $("#dispRssi").textContent="-- dBm";$("#dispBatt").textContent="-- V";
+    $("#rssiQuality").textContent="信号等级: --";
+    $("#gaugeVal").textContent="--";
+    $("#statTempMax,#statTempMin,#statTempAvg,#statPhAvg,#statVoltAvg").textContent="--";
+
+    Object.values(state.charts).forEach(ch=>{
+        if(ch){
+            ch.data.labels=[];
+            ch.data.datasets.forEach(d=>d.data=[]);
+            ch.update();
+        }
+    });
+    showToast("全部数据已重置，阈值配置保留");
+}
+function filterLog(){
+    const kw = $("#logSearchInput").value.trim().toLowerCase();
+    $$("#logTbody tr").forEach(tr=>tr.style.display = tr.textContent.toLowerCase().includes(kw)?"table-row":"none");
+}
+function appendLogRow(timeStr,temp,humi,ph,rssi,batt,status){
+    const tb = $("#logTbody");
+    const tr = document.createElement("tr");
+    tr.className="border-b border-slate-800";
+    tr.innerHTML=`<td class="py-1.5 pr-2">${timeStr}</td><td class="py-1.5 pr-2">${temp}</td><td class="py-1.5 pr-2">${humi}</td><td class="py-1.5 pr-2">${ph}</td><td class="py-1.5 pr-2">${rssi}</td><td class="py-1.5 pr-2">${batt}</td><td class="py-1.5">${status}</td>`;
+    tb.prepend(tr);
+    while(tb.children.length>state.maxLog) tb.removeChild(tb.lastChild);
+}
+function exportCsv(){
+    if(!state.csv.length) return showToast("暂无数据","warn");
+    const h="时间,温度,湿度,PH,RSSI,电池电压,状态";
+    const uri="data:text/csv;charset=utf-8,"+encodeURIComponent([h,...state.csv].join("\n"));
+    const a=document.createElement("a");a.href=uri;a.download=`sensor_log_${Date.now()}.csv`;a.click();
+    showToast("CSV导出成功","success");
+}
+function exportJson(){
+    if(!state.json.length) return showToast("暂无数据","warn");
+    const blob = new Blob([JSON.stringify(state.json,null,2)],{type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=`sensor_data_${Date.now()}.json`;a.click();URL.revokeObjectURL(url);
+    showToast("JSON导出成功","success");
+}
+function saveChartImage(){
+    try{
+        if(!state.charts.temp) return;
+        const url = state.charts.temp.toBase64Image();
+        const a=document.createElement("a");a.href=url;a.download=`chart_temp_${Date.now()}.png`;a.click();
+        showToast("图表图片已保存","success");
+    }catch(e){showToast("导出图片失败","error");}
+}
+function addFav(name,mac){
+    if(state.fav.find(x=>x.mac===mac)) return showToast("该设备已收藏");
+    state.fav.push({name,mac}); renderFavBox();
+    localStorage.setItem("favDev",JSON.stringify(state.fav));
+    showToast("已收藏设备");
+}
+function delFav(mac){
+    state.fav = state.fav.filter(x=>x.mac!==mac); renderFavBox();
+    localStorage.setItem("favDev",JSON.stringify(state.fav));
+    showToast("已取消收藏");
+}
+function renderFavBox(){
+    const box = $("#favBox");
+    if(!state.fav.length){box.textContent="暂无收藏";return;}
+    box.innerHTML="";
+    state.fav.forEach(d=>{
+        const div=document.createElement("div");
+        div.className="p-1.5 rounded bg-slate-800/30 my-1 flex justify-between items-center";
+        div.innerHTML=`<span>${d.name}</span>
+        <div class="flex gap-1">
+            <button class="fav-conn text-xs px-1 rounded bg-cyan-700" data-name="${d.name}" data-mac="${d.mac}">连接</button>
+            <button class="fav-del text-xs px-1 rounded bg-red-700" data-mac="${d.mac}"><i class="fa fa-trash"></i></button>
+        </div>`;
+        box.appendChild(div);
+    })
+}
+function startScan(){
+    showToast("开始扫描BLE设备");
+    const box = $("#devListBox");
+    box.innerHTML=`<div class="text-center py-4 text-slate-400"><i class="fa fa-spinner fa-spin"></i>扫描中...</div>`;
+    setTimeout(()=>{
+        const mockDevs = [
+            {name:"Nex‑Sensor‑01",mac:"AA:BB:CC:11:22:33",rssi:-48},
+            {name:"Env‑Sensor‑X",mac:"AA:BB:CC:44:55:66",rssi:-62},
+            {name:"Temp‑Probe‑S",mac:"AA:BB:CC:77:88:99",rssi:-74}
+        ];
+        box.innerHTML="";
+        mockDevs.forEach(d=>{
+            const div=document.createElement("div");
+            div.className="p-2 my-1 rounded bg-slate-800/40 flex justify-between items-center";
+            div.innerHTML=`
+                <div>
+                    <div class="font-medium">${d.name}</div>
+                    <div class="text-xs text-slate-500">${d.mac} | RSSI ${d.rssi}dBm</div>
+                </div>
+                <div class="flex gap-1">
+                    <button class="btn-conn text-xs px-2 py-1 rounded bg-cyan-700" data-name="${d.name}" data-mac="${d.mac}" data-rssi="${d.rssi}">连接</button>
+                    <button class="btn-fav text-xs px-2 py-1 rounded bg-amber-700" data-name="${d.name}" data-mac="${d.mac}"><i class="fa fa-star"></i></button>
+                </div>`;
+            box.appendChild(div);
+        });
+        showToast(`扫描到${mockDevs.length}个BLE设备`);
+    },1200);
+}
+function connectMockDev(name,mac,rssi){
+    state.dev={name,mac,rssi};
+    $("#sysBtDot").className="w-2.5 h-2.5 rounded-full bg-green-500 breathe-green";
+    $("#sysBtText").textContent="已连接";
+    $("#currentDev").textContent=name;
+    $("#btBadge").textContent="已连接";$("#btBadge").className="px-2 py-0.5 rounded text-xs bg-emerald-700";
+    $("#panelStatusBadge").textContent="监测中";$("#panelStatusBadge").className="px-2 py-0.5 rounded text-xs bg-emerald-700";
+    $("#btnDisconnect").classList.remove("hidden");
+    $("#devDetailPanel").innerHTML=`<div>设备名称：<span class="text-[var(--accent)]">${name}</span></div><div>MAC地址：<span class="text-slate-200">${mac}</span></div><div>初始RSSI：<span class="text-white">${rssi} dBm</span></div><div>状态：<span class="text-emerald-400">设备已建立连接</span></div>`;
+    showToast(`成功连接 ${name}`,"success");
+    startSimStream();
+}
+function disconnectDevice(){
+    if(state.timer) clearInterval(state.timer);
+    if(state.playbackTimer) clearInterval(state.playbackTimer);
+    state.timer=null; state.playbackTimer=null; state.dev=null; state.isPlayback=false;
+    $("#sysBtDot").className="w-2.5 h-2.5 rounded-full bg-slate-500";
+    $("#sysBtText").textContent="未连接";$("#currentDev").textContent="无";
+    $("#btBadge").textContent="待机";$("#btBadge").className="px-2 py-0.5 rounded text-xs bg-slate-700";
+    $("#panelStatusBadge").textContent="待机";$("#panelStatusBadge").className="px-2 py-0.5 rounded text-xs bg-slate-700";
+    $("#btnDisconnect").classList.add("hidden");
+    $("#devDetailPanel").innerHTML=`<div class="text-slate-500">未连接设备</div>`;
+    showToast("设备已断开");
+}
+function startSimStream(){
+    if(state.timer) clearInterval(state.timer);
+    state.timer = setInterval(()=>{
+        if(!state.paused && state.dev && !state.isPlayback) simulateSensorTick();
+    },state.sampleInterval);
+}
+function startPlayBack(){
+    if(!state.json.length) return showToast("没有历史数据可以回放","warn");
+    disconnectDevice(); state.isPlayback=true;
+    let idx=0; const list=[...state.json];
+    showToast(`开始回放，共${list.length}条记录`);
+    state.playbackTimer = setInterval(()=>{
+        if(idx>=list.length){
+            clearInterval(state.playbackTimer); state.playbackTimer=null; state.isPlayback=false;
+            showToast("回放结束"); return;
+        }
+        renderOneFrame(list[idx]); idx++;
+    },state.sampleInterval);
+}
+function getRssiLevel(rssi){
+    return rssi >= -50 ? "极好" : rssi >= -65 ? "良好" : rssi >= -80 ? "一般" : "较差";
+}
+function renderOneFrame(item){
+    $("#dispTemp").textContent = item.tempDisp.toFixed(1)+" "+(state.fahrenheit?"℉":"℃");
+    $("#dispHumi").textContent = item.humi.toFixed(1)+" %RH";
+    $("#dispPh").textContent = item.ph.toFixed(2);
+    $("#dispRssi").textContent = item.rssi.toFixed(0)+" dBm";
+    $("#dispBatt").textContent = item.batt.toFixed(2)+" V";
+    $("#rssiQuality").textContent = "信号等级: "+getRssiLevel(item.rssi);
+    $("#lastUpdateTime").textContent = new Date().toLocaleTimeString();
+    const minRssi=-100,maxRssi=-40;
+    const ratio = Math.min(1,Math.max(0,(item.rssi-minRssi)/(maxRssi-minRssi)));
+    $("#gaugeArc").style.strokeDashoffset = 289*(1-ratio);
+    $("#gaugeVal").textContent = Math.round(ratio*100)+"%";
+    $("#card-temp").classList.toggle("alarm",!!item.alarmTemp);
+    $("#card-ph").classList.toggle("alarm",!!item.alarmPh);
+    $("#card-humi").classList.toggle("alarm",!!item.alarmHumi);
+    $("#card-bat").classList.toggle("alarm",!!item.alarmVolt);
+    updateAllCharts(item.tempC,item.humi,item.ph,item.rssi,item.batt);
+    calcStatistics();
+}
+function calcStatistics(){
+    const tl = state.tempRec; if(!tl.length) return;
+    const tMax = Math.max(...tl); const tMin = Math.min(...tl);
+    const tAvg = tl.reduce((s,v)=>s+v,0)/tl.length;
+    const phAvg = state.phRec.reduce((s,v)=>s+v,0)/state.phRec.length;
+    const voltAvg = state.battRec.reduce((s,v)=>s+v,0)/state.battRec.length;
+    $("#statTempMax").textContent = tMax.toFixed(1);
+    $("#statTempMin").textContent = tMin.toFixed(1);
+    $("#statTempAvg").textContent = tAvg.toFixed(1);
+    $("#statPhAvg").textContent = phAvg.toFixed(2);
+    $("#statVoltAvg").textContent = voltAvg.toFixed(2);
+}
+function updateAllCharts(temp,humi,ph,rssi,batt){
+    const c = state.charts;
+    const label = "";
+    if(c.temp){
+        c.temp.data.labels.push(label);
+        c.temp.data.datasets[0].data.push(temp);
+        while(c.temp.data.datasets[0].data.length>state.maxStore){c.temp.data.labels.shift(); c.temp.data.datasets[0].data.shift();}
+        c.temp.update();
+    }
+    if(c.humi){
+        c.humi.data.labels.push(label);
+        c.humi.data.datasets[0].data.push(humi);
+        while(c.humi.data.datasets[0].data.length>state.maxStore){c.humi.data.labels.shift(); c.humi.data.datasets[0].data.shift();}
+        c.humi.update();
+    }
+    if(c.ph){
+        c.ph.data.labels.push(label);
+        c.ph.data.datasets[0].data.push(ph);
+        while(c.ph.data.datasets[0].data.length>state.maxStore){c.ph.data.labels.shift(); c.ph.data.datasets[0].data.shift();}
+        c.ph.update();
+    }
+    if(c.volt){
+        c.volt.data.labels.push(label);
+        c.volt.data.datasets[0].data.push(batt);
+        while(c.volt.data.datasets[0].data.length>state.maxStore){c.volt.data.labels.shift(); c.volt.data.datasets[0].data.shift();}
+        c.volt.update();
+    }
+    if(c.rssi){
+        c.rssi.data.labels.push(label);
+        c.rssi.data.datasets[0].data.push(rssi);
+        while(c.rssi.data.datasets[0].data.length>state.maxStore){c.rssi.data.labels.shift(); c.rssi.data.datasets[0].data.shift();}
+        c.rssi.update();
+    }
+}
+function updateAllChartThresholdLines(){
+    const th = state.threshold;
+    state.charts.temp.options.plugins.annotation.annotations={
+        tempMax:{type:'line',yMin:th.tempMax,yMax:th.tempMax,borderColor:'rgba(239,68,68,0.7)',borderWidth:2,label:{display:true,content:`上限${th.tempMax}℃`,position:'end',color:"#fff"}},
+        tempMin:{type:'line',yMin:th.tempMin,yMax:th.tempMin,borderColor:'rgba(239,68,68,0.7)',borderWidth:2,label:{display:true,content:`下限${th.tempMin}℃`,position:'end',color:"#fff"}}
+    };
+    state.charts.humi.options.plugins.annotation.annotations={
+        humiMax:{type:'line',yMin:th.humiMax,yMax:th.humiMax,borderColor:'rgba(239,68,68,0.7)',borderWidth:2,label:{display:true,content:`上限${th.humiMax}%RH`,position:'end',color:"#fff"}},
+        humiMin:{type:'line',yMin:th.humiMin,yMax:th.humiMin,borderColor:'rgba(239,68,68,0.7)',borderWidth:2,label:{display:true,content:`下限${th.humiMin}%RH`,position:'end',color:"#fff"}}
+    };
+    state.charts.ph.options.plugins.annotation.annotations={
+        phMax:{type:'line',yMin:th.phMax,yMax:th.phMax,borderColor:'rgba(239,68,68,0.7)',borderWidth:2,label:{display:true,content:`PH上限${th.phMax}`,position:'end',color:"#fff"}},
+        phMin:{type:'line',yMin:th.phMin,yMax:th.phMin,borderColor:'rgba(239,68,68,0.7)',borderWidth:2,label:{display:true,content:`PH下限${th.phMin}`,position:'end',color:"#fff"}}
+    };
+    state.charts.volt.options.plugins.annotation.annotations={
+        voltMax:{type:'line',yMin:th.voltMax,yMax:th.voltMax,borderColor:'rgba(239,68,68,0.7)',borderWidth:2,label:{display:true,content:`上限${th.voltMax}V`,position:'end',color:"#fff"}},
+        voltMin:{type:'line',yMin:th.voltMin,yMax:th.voltMin,borderColor:'rgba(239,68,68,0.7)',borderWidth:2,label:{display:true,content:`下限${th.voltMin}V`,position:'end',color:"#fff"}}
+    };
+    state.charts.rssi.options.plugins.annotation.annotations={
+        rssiAlarm:{type:'line',yMin:th.rssiTh,yMax:th.rssiTh,borderColor:'rgba(239,68,68,0.7)',borderWidth:2,label:{display:true,content:`告警阈值${th.rssiTh}dBm`,position:'end',color:"#fff"}}
+    };
+    Object.values(state.charts).forEach(c=>{if(c) c.update();});
+}
+
+const referenceData = [
+    [28.754, 54.685],
+    [28.728, 54.468],
+    [28.712, 54.548],
+    [28.690, 54.595],
+    [28.693, 54.864],
+    [28.658, 54.803],
+    [28.605, 56.297],
+    [28.517, 55.980]
+    // 后面继续放数据集中的数据
+];
+
+let referenceIndex = 0;
+
+
+// ========================================
+// 根据参考数据生成模拟温度
+// ========================================
+
+function getReferenceTemperature(){
+
+    const refTemp = referenceData[referenceIndex][0];
+
+    return 36.5 + (refTemp - 28.7);
+}
+
+
+// ========================================
+// 根据参考数据生成模拟湿度
+// ========================================
+
+function getReferenceHumidity(){
+
+    const refHumi = referenceData[referenceIndex][1];
+
+    return 84 + (refHumi - 54.5);
+}
+
+
+function simulateSensorTick(){
+    if(referenceIndex >= referenceData.length){
+        referenceIndex = 0;
+    }
+    const rawTempC = getReferenceTemperature();
+    const rawHumi = getReferenceHumidity();
+    const rawPh = 2.4 + (Math.random()-0.5)*1.2;
+    const rawRssi = -45 + (Math.random()-0.5)*30;
+    const rawBatt = 3.05 + (Math.random()-0.5)*0.25;
+
+    const tempC = lowPassFilter(state.filterBuf.temp, rawTempC, state.filterWindow);
+    const humi = lowPassFilter(state.filterBuf.humi, rawHumi, state.filterWindow);
+    const ph = lowPassFilter(state.filterBuf.ph, rawPh, state.filterWindow);
+    const rssi = lowPassFilter(state.filterBuf.rssi, rawRssi, state.filterWindow);
+    const batt = lowPassFilter(state.filterBuf.batt, rawBatt, state.filterWindow);
+
+    const tempDisp = state.fahrenheit ? tempC*1.8+32 : tempC;
+
+    const alarmTemp = (tempC>state.threshold.tempMax) || (tempC<state.threshold.tempMin);
+    const alarmHumi = (humi>state.threshold.humiMax) || (humi<state.threshold.humiMin);
+    const alarmPh = (ph>state.threshold.phMax) || (ph<state.threshold.phMin);
+    const alarmVolt = (batt>state.threshold.voltMax) || (batt<state.threshold.voltMin);
+    const alarmRssi = rssi < state.threshold.rssiTh;
+
+    if(alarmTemp) pushAlarm("温度超出阈值范围");
+    if(alarmHumi) pushAlarm("湿度超出阈值范围");
+    if(alarmPh) pushAlarm("PH超出阈值范围");
+    if(alarmVolt) pushAlarm("电池电压超出阈值范围");
+    if(alarmRssi) pushAlarm("蓝牙信号强度过低");
+
+    state.tempRec.push(tempC);
+    state.humiRec.push(humi);
+    state.phRec.push(ph);
+    state.rssiRec.push(rssi);
+    state.battRec.push(batt);
+
+    state.sampleCounter++;
+    $("#dispCount").textContent = state.sampleCounter;
+    const nowStr = new Date().toLocaleTimeString();
+    $("#lastUpdateTime").textContent = nowStr;
+
+    const logItem = {
+        tempC, tempDisp, humi, ph, rssi, batt,
+        alarmTemp, alarmHumi, alarmPh, alarmVolt, alarmRssi
+    };
+    state.json.push(logItem);
+    state.csv.push(`${nowStr},${tempC.toFixed(2)},${humi.toFixed(2)},${ph.toFixed(2)},${rssi.toFixed(0)},${batt.toFixed(2)},${alarmTemp||alarmHumi||alarmPh||alarmVolt||alarmRssi?"异常":"正常"}`);
+
+    appendLogRow(nowStr,tempC.toFixed(1),humi.toFixed(1),ph.toFixed(2),rssi.toFixed(0),batt.toFixed(2),alarmTemp||alarmHumi||alarmPh||alarmVolt||alarmRssi?"异常":"正常");
+    renderOneFrame(logItem);
+}
+
+function initCharts(){
+    const chartOpt = {
+        responsive:true,
+        maintainAspectRatio:false,
+        plugins:{
+            legend:{display:false},
+            annotation:{annotations:{}}
+        },
+        scales:{
+            x:{display:false},
+            y:{grid:{color:"rgba(148,163,184,0.12)"},ticks:{color:"#94a3b8"}}
+        }
+    };
+    state.charts.temp = new Chart($("#chartTemp"),{type:"line",data:{labels:[],datasets:[{label:"温度",data:[],borderColor:"#22d3ee",backgroundColor:"rgba(34,211,238,0.15)",fill:true,tension:0.2}]},options:chartOpt});
+    state.charts.humi = new Chart($("#chartHumi"),{type:"line",data:{labels:[],datasets:[{label:"湿度",data:[],borderColor:"#10b981",backgroundColor:"rgba(16,185,129,0.15)",fill:true,tension:0.2}]},options:chartOpt});
+    state.charts.ph = new Chart($("#chartPh"),{type:"line",data:{labels:[],datasets:[{label:"PH",data:[],borderColor:"#f59e0b",backgroundColor:"rgba(245,158,11,0.15)",fill:true,tension:0.2}]},options:chartOpt});
+    state.charts.volt = new Chart($("#chartVolt"),{type:"line",data:{labels:[],datasets:[{label:"电压",data:[],borderColor:"#a78bfa",backgroundColor:"rgba(167,139,250,0.15)",fill:true,tension:0.2}]},options:chartOpt});
+    state.charts.rssi = new Chart($("#chartRssi"),{type:"line",data:{labels:[],datasets:[{label:"RSSI",data:[],borderColor:"#fb7185",backgroundColor:"rgba(251,113,133,0.15)",fill:true,tension:0.2}]},options:chartOpt});
+}
+
+// 绑定全部按钮事件
+function bindEvents(){
+    $("#themeSelect").addEventListener("change", changeGlobalTheme);
+    $("#themeToggle").addEventListener("click", togglePauseStream);
+    $("#alarmAudioToggle").addEventListener("click", toggleAlarmAudio);
+    $("#btnToggleUnit").addEventListener("click", toggleTempUnit);
+    $("#scanBtn").addEventListener("click", startScan);
+    $("#btnDisconnect").addEventListener("click", disconnectDevice);
+    $("#btnResetAll").addEventListener("click", resetAllData);
+    $("#btnSaveThreshold").addEventListener("click", saveThreshold);
+    $("#sampleRateSel").addEventListener("change", changeSampleRate);
+    $("#maxStoreSel").addEventListener("change", updateMaxStore);
+    $("#workModeSel").addEventListener("change", changeWorkMode);
+    $("#btnClearAlarm").addEventListener("click", clearAlarm);
+    $("#btnClearLog").addEventListener("click", clearLog);
+    $("#btnFilterLog").addEventListener("click", filterLog);
+    $("#btnExportCsv").addEventListener("click", exportCsv);
+    $("#btnExportJson").addEventListener("click", exportJson);
+    $("#btnSaveChartImg").addEventListener("click", saveChartImage);
+    $("#btnPlayBack").addEventListener("click", startPlayBack);
+
+    // 扫描出来的设备列表动态按钮事件委托
+    $("#devListBox").addEventListener("click",(e)=>{
+        if(e.target.classList.contains("btn-conn")){
+            const name = e.target.dataset.name;
+            const mac = e.target.dataset.mac;
+            const rssi = Number(e.target.dataset.rssi);
+            connectMockDev(name,mac,rssi);
+        }else if(e.target.classList.contains("btn-fav")){
+            const name = e.target.dataset.name;
+            const mac = e.target.dataset.mac;
+            addFav(name,mac);
+        }
+    });
+    //收藏设备按钮委托
+    $("#favBox").addEventListener("click",(e)=>{
+        if(e.target.classList.contains("fav-conn")){
+            const name = e.target.dataset.name;
+            const mac = e.target.dataset.mac;
+            connectMockDev(name,mac,-55);
+        }else if(e.target.classList.contains("fav-del")){
+            const mac = e.target.dataset.mac;
+            delFav(mac);
+        }
+    });
+}
+
+window.onload = function(){
+    initCharts();
+    bindEvents();
+    renderFavBox();
+    //读取本地存储阈值
+    const savedTh = localStorage.getItem("tempThreshold");
+    if(savedTh){
+        const th = JSON.parse(savedTh);
+        Object.assign(state.threshold,th);
+        $("#tempMax").value = th.tempMax;
+        $("#tempMin").value = th.tempMin;
+        $("#phMax").value = th.phMax;
+        $("#phMin").value = th.phMin;
+        $("#humiMax").value = th.humiMax;
+        $("#humiMin").value = th.humiMin;
+        $("#voltMax").value = th.voltMax;
+        $("#voltMin").value = th.voltMin;
+        $("#rssiAlarmTh").value = th.rssiTh;
+    }
+    const savedFav = localStorage.getItem("favDev");
+    if(savedFav){
+        state.fav = JSON.parse(savedFav);
+        renderFavBox();
+    }
+};
+</script>
+</body>
+</html>
